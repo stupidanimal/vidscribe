@@ -12,12 +12,14 @@ Video/Audio → ffmpeg extracts audio → faster-whisper transcribes (local) →
 
 ## Features
 
+- **Isolated environment** — venv auto-created, no conflicts with user's Python
 - Local transcription (no cloud, no API keys, no data leaves your machine)
 - Support 99+ languages (English, Chinese, Japanese, etc.)
 - Auto-detect video vs audio input
 - Download from URL via yt-dlp (YouTube, Bilibili, etc.)
 - Batch mode (process entire folder)
 - Smart caching (skip if transcript already exists)
+- Auto model selection based on GPU/CPU hardware
 
 ## Requirements
 
@@ -29,17 +31,17 @@ Video/Audio → ffmpeg extracts audio → faster-whisper transcribes (local) →
 ## Quick Start
 
 ```bash
-# Install dependencies
-pip install faster-whisper yt-dlp
+# One-click install (creates isolated venv)
+scripts/install.bat
 
 # Transcribe a local video
-python scripts/transcribe.py "video.mp4" --model base
+scripts/run.bat "video.mp4"
 
 # Transcribe from URL
-python scripts/transcribe.py "https://youtube.com/watch?v=..." --model small
+scripts/run.bat "https://youtube.com/watch?v=..."
 
 # Batch process a folder
-python scripts/transcribe.py "./videos/" --batch --model tiny
+scripts/run.bat "./videos/" --batch
 ```
 
 ## Model Selection

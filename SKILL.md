@@ -9,21 +9,14 @@ Extract text from video/audio, then summarize the content.
 
 ## Preflight Check (run once)
 
-Before first use, check dependencies. Run these commands and install if missing:
+Run the installer to create an isolated environment (no conflicts with user's Python):
 
 ```bash
-# Check ffmpeg
-ffmpeg -version 2>$null || winget install ffmpeg
-
-# Check Python packages
-python -c "import faster_whisper" 2>$null || pip install faster-whisper
-python -c "import yt_dlp" 2>$null || pip install yt-dlp
-
-# Check GPU (optional, for speed)
-python -c "import torch; assert torch.cuda.is_available()" 2>$null && echo "GPU OK" || echo "CPU only"
+# One-click install (creates venv + installs dependencies)
+<skill_dir>/scripts/install.bat
 ```
 
-If `<skill_dir>/scripts/install.bat` exists, run it for one-click setup.
+This creates `<skill_dir>/venv/` with all dependencies isolated from the user's system.
 
 ## Pipeline
 
@@ -48,7 +41,7 @@ Check for existing files before re-running. If `_summary.md` exists, just read i
 ### Check hardware first
 
 ```bash
-python <skill_dir>/scripts/transcribe.py --info
+<skill_dir>/scripts/run.bat --info
 ```
 
 This prints GPU/CPU and recommended model. Use this to decide which model to use.
@@ -66,16 +59,16 @@ This prints GPU/CPU and recommended model. Use this to decide which model to use
 
 ```bash
 # Local file (auto model)
-python <skill_dir>/scripts/transcribe.py "<input_file>"
+<skill_dir>/scripts/run.bat "<input_file>"
 
 # Force specific model
-python <skill_dir>/scripts/transcribe.py "<input_file>" --model small
+<skill_dir>/scripts/run.bat "<input_file>" --model small
 
 # URL (auto-download via yt-dlp)
-python <skill_dir>/scripts/transcribe.py "https://youtube.com/watch?v=..."
+<skill_dir>/scripts/run.bat "https://youtube.com/watch?v=..."
 
 # Batch (all media in folder)
-python <skill_dir>/scripts/transcribe.py "<folder>" --batch
+<skill_dir>/scripts/run.bat "<folder>" --batch
 ```
 
 Options:
