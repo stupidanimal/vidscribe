@@ -1,11 +1,13 @@
-# video-to-summary
+# vidscribe
 
-Transcribe video/audio to text and summarize content. Supports 99+ languages, works 100% locally (no API keys needed).
+An AI Agent Skill that transcribes video/audio to text and summarizes content. Works with Claude Code, Codex, Gemini CLI, and other agent CLIs that support the Agent Skills standard.
+
+The heavy lifting is done by [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (local Whisper implementation). The skill wraps it into an agent-friendly workflow with smart caching and structured output.
 
 ## What it does
 
 ```
-Video/Audio → ffmpeg extracts audio → faster-whisper transcribes → LLM summarizes
+Video/Audio → ffmpeg extracts audio → faster-whisper transcribes (local) → LLM summarizes
 ```
 
 ## Features
