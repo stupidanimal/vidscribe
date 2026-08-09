@@ -11,7 +11,6 @@ Output: plain text with timestamps, one segment per line.
 """
 
 import argparse
-import glob
 import os
 import subprocess
 import sys
@@ -225,11 +224,6 @@ def process_single(input_path: str, model_size: str, language: str, output_path:
     if not output_path:
         output_path = str(input_path.with_suffix("")) + "_transcript.txt"
 
-    # Check if transcript already exists (skip only if not generating new outputs)
-    if os.path.exists(output_path) and not srt and not burn:
-        print(f"Transcript already exists: {output_path} (skipping)", file=sys.stderr)
-        return output_path
-
     # Detect video vs audio
     probe = subprocess.run(
         ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
@@ -238,41 +232,66 @@ def process_single(input_path: str, model_size: str, language: str, output_path:
     )
     is_video = "video" in probe.stdout
 
-    if is_video:
-        print("Input is video, extracting audio...", file=sys.stderr)
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            tmp_audio = tmp.name
-        if not extract_audio(str(input_path), tmp_audio):
-            return None
-        audio_to_transcribe = tmp_audio
-    else:
-        audio_to_transcribe = str(input_path)
+    # Check if transcript already exists
+    segments = None
+    if os.path.exists(output_path):
+        print(f"Transcript exists: {output_path} (reusing)", file=sys.stderr)
+        # Read existing segments from file
+        segments = []
+        with open(output_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("[") and "]" in line:
+                    ts_end = line.index("]")
+                    ts_str = line[1:ts_end]
+                    text = line[ts_end+1:].strip()
+                    parts = ts_str.split(":")
+                    if len(parts) == 3:
+                        sec = int(parts[0])*3600 + int(parts[1])*60 + int(parts[2])
+                    elif len(parts) == 2:
+                        sec = int(parts[0])*60 + int(parts[1])
+                    else:
+                        continue
+                    segments.append((sec, sec + 5, text))
 
-    try:
-        segments = transcribe(audio_to_transcribe, model_size, language, device)
-        write_output(segments, output_path)
+    # Transcribe if no existing segments
+    if segments is None:
+        if is_video:
+            print("Input is video, extracting audio...", file=sys.stderr)
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp_audio = tmp.name
+            if not extract_audio(str(input_path), tmp_audio):
+                return None
+            audio_to_transcribe = tmp_audio
+        else:
+            audio_to_transcribe = str(input_path)
 
-        # Generate SRT if requested
-        if srt:
-            srt_path = str(input_path.with_suffix("")) + ".srt"
+        try:
+            segments = transcribe(audio_to_transcribe, model_size, language, device)
+            write_output(segments, output_path)
+        finally:
+            if is_video and os.path.exists(tmp_audio):
+                os.unlink(tmp_audio)
+
+    # Generate SRT if requested
+    if srt:
+        srt_path = str(input_path.with_suffix("")) + ".srt"
+        write_srt(segments, srt_path)
+
+    # Burn subtitles into video if requested
+    if burn and is_video:
+        srt_path = str(input_path.with_suffix("")) + ".srt"
+        if not os.path.exists(srt_path):
             write_srt(segments, srt_path)
+        burned_path = str(input_path.with_suffix("")) + "_subtitled" + input_path.suffix
+        burn_subtitles(str(input_path), srt_path, burned_path)
 
-        # Burn subtitles into video if requested
-        if burn and is_video:
-            srt_path = str(input_path.with_suffix("")) + ".srt"
-            if not os.path.exists(srt_path):
-                write_srt(segments, srt_path)
-            burned_path = str(input_path.with_suffix("")) + "_subtitled" + input_path.suffix
-            burn_subtitles(str(input_path), srt_path, burned_path)
+    # Print to stdout
+    for start, end, text in segments:
+        ts = format_timestamp(start)
+        print(f"[{ts}] {text}")
 
-        for start, end, text in segments:
-            ts = format_timestamp(start)
-            print(f"[{ts}] {text}")
-
-        return output_path
-    finally:
-        if is_video and os.path.exists(tmp_audio):
-            os.unlink(tmp_audio)
+    return output_path
 
 
 def main():
@@ -341,11 +360,14 @@ def main():
 
         elif is_url(args.input):
             # URL mode: download then transcribe
-            # 输出必须写到临时目录外面（cwd 或 --output 指定路径）：
-            # TemporaryDirectory 退出时会删除整个目录，转写文件写在里面会一起被删
             with tempfile.TemporaryDirectory() as tmpdir:
                 downloaded_file = download_video(args.input, tmpdir)
-                output_path = args.output or (str(Path(downloaded_file).with_suffix("")) + "_transcript.txt")
+                # Output goes to CWD, not temp dir
+                if args.output:
+                    output_path = args.output
+                else:
+                    video_name = Path(downloaded_file).stem
+                    output_path = str(Path.cwd() / (video_name + "_transcript.txt"))
                 process_single(downloaded_file, args.model, args.language, output_path, device=args.device, srt=generate_srt, burn=args.burn)
 
         else:
