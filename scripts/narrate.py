@@ -12,6 +12,7 @@ Usage:
 import argparse
 import asyncio
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -140,11 +141,68 @@ def get_default_voice(language: str) -> str:
 
 
 async def generate_narration(text: str, voice: str, output_path: str, rate: str = "+0%"):
-    """Generate narration audio using edge-tts."""
-    import edge_tts
+    """Generate narration audio using edge-tts.
     
-    communicate = edge_tts.Communicate(text, voice, rate=rate)
-    await communicate.save(output_path)
+    Splits text into chunks to avoid TTS truncation on long texts.
+    Each chunk is generated separately, then concatenated.
+    """
+    import edge_tts
+    import subprocess
+    
+    # Split text into chunks by sentence/paragraph
+    sentences = []
+    for para in text.split("\n"):
+        para = para.strip()
+        if not para:
+            continue
+        # Split by sentence endings
+        for sent in re.split(r'(?<=[。！？.!?])\s*', para):
+            if sent.strip():
+                sentences.append(sent.strip())
+    
+    # Group sentences into chunks (max 100 chars each)
+    chunks = []
+    current = ""
+    for sent in sentences:
+        if len(current) + len(sent) > 100 and current:
+            chunks.append(current)
+            current = sent
+        else:
+            current = current + " " + sent if current else sent
+    if current:
+        chunks.append(current)
+    
+    print(f"Generating {len(chunks)} TTS chunks...", file=sys.stderr)
+    
+    # Generate each chunk
+    chunk_files = []
+    for i, chunk in enumerate(chunks):
+        chunk_path = output_path + f".chunk_{i:03d}.mp3"
+        communicate = edge_tts.Communicate(chunk, voice, rate=rate)
+        await communicate.save(chunk_path)
+        chunk_files.append(chunk_path)
+    
+    # Concatenate chunks
+    if len(chunk_files) == 1:
+        os.rename(chunk_files[0], output_path)
+    else:
+        concat_path = output_path + ".concat.txt"
+        with open(concat_path, "w") as f:
+            for cf in chunk_files:
+                f.write(f"file '{cf}'\n")
+        
+        subprocess.run([
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+            "-i", concat_path,
+            "-c", "copy",
+            output_path
+        ], capture_output=True)
+        
+        # Cleanup temp files
+        os.unlink(concat_path)
+        for cf in chunk_files:
+            os.unlink(cf)
+    
     print(f"Narration audio: {output_path}", file=sys.stderr)
 
 
