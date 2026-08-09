@@ -177,7 +177,45 @@ def write_output(segments: list, output_path: str):
     print(f"Written to: {output_path}", file=sys.stderr)
 
 
-def process_single(input_path: str, model_size: str, language: str, output_path: str = None, device: str = None) -> str:
+def format_srt_time(seconds: float) -> str:
+    """Convert seconds to SRT time format HH:MM:SS,mmm."""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    ms = int((seconds % 1) * 1000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def write_srt(segments: list, output_path: str):
+    """Write segments to SRT subtitle file."""
+    with open(output_path, "w", encoding="utf-8") as f:
+        for i, (start, end, text) in enumerate(segments, 1):
+            f.write(f"{i}\n")
+            f.write(f"{format_srt_time(start)} --> {format_srt_time(end)}\n")
+            f.write(f"{text}\n\n")
+    print(f"SRT written to: {output_path}", file=sys.stderr)
+
+
+def burn_subtitles(video_path: str, srt_path: str, output_path: str) -> bool:
+    """Burn SRT subtitles into video using ffmpeg."""
+    # Escape path for ffmpeg subtitles filter (Windows needs forward slashes and escaped colons)
+    srt_escaped = srt_path.replace("\\", "/").replace(":", "\\:")
+    style = "FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1"
+    cmd = [
+        "ffmpeg", "-y", "-i", video_path,
+        "-vf", f"subtitles='{srt_escaped}':force_style='{style}'",
+        "-c:a", "copy",
+        output_path
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"ffmpeg error: {result.stderr}", file=sys.stderr)
+        return False
+    print(f"Video with subtitles: {output_path}", file=sys.stderr)
+    return True
+
+
+def process_single(input_path: str, model_size: str, language: str, output_path: str = None, device: str = None, srt: bool = False, burn: bool = False) -> str:
     """Process one file. Returns output path."""
     input_path = Path(input_path)
     if not input_path.exists():
@@ -187,8 +225,8 @@ def process_single(input_path: str, model_size: str, language: str, output_path:
     if not output_path:
         output_path = str(input_path.with_suffix("")) + "_transcript.txt"
 
-    # Check if transcript already exists
-    if os.path.exists(output_path):
+    # Check if transcript already exists (skip only if not generating new outputs)
+    if os.path.exists(output_path) and not srt and not burn:
         print(f"Transcript already exists: {output_path} (skipping)", file=sys.stderr)
         return output_path
 
@@ -213,6 +251,19 @@ def process_single(input_path: str, model_size: str, language: str, output_path:
     try:
         segments = transcribe(audio_to_transcribe, model_size, language, device)
         write_output(segments, output_path)
+
+        # Generate SRT if requested
+        if srt:
+            srt_path = str(input_path.with_suffix("")) + ".srt"
+            write_srt(segments, srt_path)
+
+        # Burn subtitles into video if requested
+        if burn and is_video:
+            srt_path = str(input_path.with_suffix("")) + ".srt"
+            if not os.path.exists(srt_path):
+                write_srt(segments, srt_path)
+            burned_path = str(input_path.with_suffix("")) + "_subtitled" + input_path.suffix
+            burn_subtitles(str(input_path), srt_path, burned_path)
 
         for start, end, text in segments:
             ts = format_timestamp(start)
@@ -241,6 +292,12 @@ def main():
                         help="Device to use (default: auto-detect GPU)")
     parser.add_argument("--info", action="store_true",
                         help="Print hardware info and exit (no transcription)")
+    parser.add_argument("--srt", action="store_true", default=True,
+                        help="Generate SRT subtitle file (default: on)")
+    parser.add_argument("--no-srt", action="store_true",
+                        help="Skip SRT generation")
+    parser.add_argument("--burn", action="store_true",
+                        help="Burn subtitles into video (requires video input)")
     args = parser.parse_args()
 
     # Info mode: just print hardware and exit
@@ -254,6 +311,9 @@ def main():
     # Input is required when not using --info
     if not args.input:
         parser.error("input is required (or use --info to check hardware)")
+
+    # Determine SRT generation (default on, --no-srt to disable)
+    generate_srt = args.srt and not args.no_srt
 
     downloaded_file = None
 
@@ -277,18 +337,18 @@ def main():
             print(f"Found {len(media_files)} media files", file=sys.stderr)
             for i, f in enumerate(media_files, 1):
                 print(f"\n[{i}/{len(media_files)}] {f.name}", file=sys.stderr)
-                process_single(str(f), args.model, args.language, device=args.device)
+                process_single(str(f), args.model, args.language, device=args.device, srt=generate_srt, burn=args.burn)
 
         elif is_url(args.input):
             # URL mode: download then transcribe
             with tempfile.TemporaryDirectory() as tmpdir:
                 downloaded_file = download_video(args.input, tmpdir)
                 output_path = args.output or (str(Path(downloaded_file).with_suffix("")) + "_transcript.txt")
-                process_single(downloaded_file, args.model, args.language, output_path, device=args.device)
+                process_single(downloaded_file, args.model, args.language, output_path, device=args.device, srt=generate_srt, burn=args.burn)
 
         else:
             # Single file mode
-            process_single(args.input, args.model, args.language, args.output, device=args.device)
+            process_single(args.input, args.model, args.language, args.output, device=args.device, srt=generate_srt, burn=args.burn)
 
     finally:
         # Cleanup downloaded file if it was in a temp dir

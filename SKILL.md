@@ -1,137 +1,112 @@
 ---
-name: video-to-summary
-description: "Transcribe audio/video files to text and summarize content. Use when user wants to 'extract text from video', 'transcribe audio', 'summarize a video', 'what does this video say', 'convert speech to text', or provides a video/audio file for analysis. Supports MP4, MKV, WebM, MP3, WAV, M4A, and other common formats."
+name: vidscribe
+description: "Transcribe video/audio to text, generate subtitles, and summarize content. Use when user wants to 'extract text from video', 'transcribe audio', 'summarize a video', 'what does this video say', 'convert speech to text', 'add subtitles to video', or provides a video/audio file for analysis. Supports MP4, MKV, WebM, MP3, WAV, M4A and other formats. Also supports URL download (YouTube, etc.) via yt-dlp."
 ---
 
-# Video-to-Summary
+# vidscribe
 
-Extract text from video/audio, then summarize the content.
+Transcribe video/audio to text, generate subtitles, and summarize content. Runs 100% locally via faster-whisper (no API keys, no cloud).
 
-## Preflight Check (run once)
-
-Run the installer to create an isolated environment (no conflicts with user's Python):
+## Setup (run once)
 
 ```bash
-# One-click install (creates venv + installs dependencies)
 <skill_dir>/scripts/install.bat
 ```
 
-This creates `<skill_dir>/venv/` with all dependencies isolated from the user's system.
+Creates isolated venv at `<skill_dir>/venv/`. No conflicts with user's Python.
 
-## Pipeline
+**Note**: First run downloads the Whisper model (~1GB, one-time). HuggingFace token is optional — without it, downloads are slower but still work. Set `HF_TOKEN` env var to speed up.
 
-1. **Extract audio** — ffmpeg pulls audio track from video
-2. **Transcribe** — faster-whisper converts speech to timestamped text
-3. **Save** — transcript.txt + summary.md saved next to source video
-4. **Summarize** — LLM reads transcript and produces summary
-
-## Output Structure
-
-For each video, two files are generated alongside it:
-```
-video.mp4
-video_transcript.txt    ← timestamped raw text (reuse on next visit)
-video_summary.md        ← structured summary (reuse on next visit)
-```
-
-Check for existing files before re-running. If `_summary.md` exists, just read it.
-
-## Step 1 — Transcribe
-
-### Check hardware first
+## Quick Reference
 
 ```bash
+# Transcribe + generate SRT (default)
+<skill_dir>/scripts/run.bat "video.mp4"
+
+# Transcribe only (no SRT)
+<skill_dir>/scripts/run.bat "video.mp4" --no-srt
+
+# Transcribe + burn subtitles into video
+<skill_dir>/scripts/run.bat "video.mp4" --burn
+
+# Download from URL and transcribe
+<skill_dir>/scripts/run.bat "https://youtube.com/watch?v=..."
+
+# Batch process folder
+<skill_dir>/scripts/run.bat "./videos/" --batch
+
+# Check hardware (GPU/CPU, recommended model)
 <skill_dir>/scripts/run.bat --info
 ```
 
-This prints GPU/CPU and recommended model. Use this to decide which model to use.
+## Output Files
 
-### Model selection guide
-
-| User intent | Model | When to use |
-|-------------|-------|-------------|
-| "just need it fast" / "quick draft" | `tiny` | Speed first, quality doesn't matter |
-| No preference / default | `auto` | Let script decide based on hardware |
-| "better quality" / "accurate" | `small` or `medium` | Non-English needs at least `small` |
-| "best quality" / "highest accuracy" | `large-v3` | Not urgent, need best results |
-
-### Run transcription
-
-```bash
-# Local file (auto model)
-<skill_dir>/scripts/run.bat "<input_file>"
-
-# Force specific model
-<skill_dir>/scripts/run.bat "<input_file>" --model small
-
-# URL (auto-download via yt-dlp)
-<skill_dir>/scripts/run.bat "https://youtube.com/watch?v=..."
-
-# Batch (all media in folder)
-<skill_dir>/scripts/run.bat "<folder>" --batch
+For each video, generated alongside it:
+```
+video.mp4                ← source
+video_transcript.txt     ← timestamped raw text
+video.srt                ← subtitle file (--srt flag)
+video_subtitled.mp4      ← video with hardcoded subtitles (--burn flag)
+video_summary.md         ← LLM-generated summary (Step 2)
 ```
 
-Options:
-- `--model`: `auto` (default, hardware-based), `tiny`, `base`, `small`, `medium`, `large-v3`
-- `--language`: force language code (`en`, `zh`, `ja`, etc.) — skip auto-detect if known
-- `--output`: output file path
-- `--batch`: process all media files in a folder
-- `--info`: print hardware info and exit (no transcription)
+**Smart caching**: If `_transcript.txt` exists, transcription is skipped. If `_summary.md` exists, just read it.
 
-The script auto-detects video vs audio input. Video files get audio extracted via ffmpeg first. If transcript already exists, it skips (no re-processing).
+## Step 1 — Transcribe
 
-Output format — one line per segment with timestamp:
-```
-[00:15] Hello and welcome to the show.
-[00:22] Today we're talking about AI.
-```
+### Model selection
+
+Model is auto-selected based on hardware. Override only if user specifies:
+
+| User says | Model | Notes |
+|-----------|-------|-------|
+| "quick" / "fast" | `tiny` | Speed first |
+| (default) | `auto` | Script decides based on GPU |
+| "accurate" / "better quality" | `small` or `medium` | Non-English needs at least `small` |
+| "best" / "highest quality" | `large-v3` | Slowest but most accurate |
+
+Hardware auto-selection:
+| Hardware | Auto Model | 30min video |
+|----------|-----------|-------------|
+| GPU 16GB+ | `medium` | ~1 min |
+| GPU 4-8GB | `small` | ~30s |
+| GPU <4GB | `base` | ~20s |
+| CPU only | `tiny` | ~5 min |
+
+### All options
+
+- `--model`: `auto`, `tiny`, `base`, `small`, `medium`, `large-v3`
+- `--language`: force language code (`en`, `zh`, `ja`, etc.)
+- `--output`: custom output path
+- `--batch`: process all media in folder
+- `--srt`: generate SRT subtitle file (default: on)
+- `--no-srt`: skip SRT generation
+- `--burn`: burn subtitles permanently into video (user must explicitly request this)
+- `--device`: `auto`, `cuda`, `cpu`
+- `--info`: print hardware info and exit
 
 ## Step 2 — Summarize
 
-**Language rule**: Output the summary in the same language the user is writing in, NOT the language of the video. If the user asks in Chinese, summarize in Chinese. If they ask in English, summarize in English. The transcript stays in the original language.
+**Language rule**: Summarize in the user's language, NOT the video's language.
 
-**Save outputs**: Always save both files alongside the source video:
-- `<video_name>_transcript.txt` — raw transcript with timestamps
-- `<video_name>_summary.md` — structured summary
+Read the transcript, then produce:
 
-If both files already exist, skip transcription and just read the summary. If only transcript exists, skip transcription and go straight to summarizing. This avoids re-consuming tokens on repeat visits.
-
-Read the transcript file, then produce:
-
-### For news/interview content:
-- **Key Points** — bullet list of main topics discussed
+### News / interview content:
+- **Key Points** — main topics discussed
 - **Notable Quotes** — exact quotes with speaker attribution if identifiable
-- **Action Items** — any decisions, announcements, or next steps mentioned
+- **Action Items** — decisions, announcements, next steps
 - **TL;DR** — 2-3 sentence summary
 
-### For technical/educational content:
+### Technical / educational content:
 - **Main Topic** — what is being taught/discussed
 - **Key Concepts** — definitions and explanations
 - **Code/Commands** — any technical details mentioned
 - **TL;DR** — 2-3 sentence summary
 
-## Model Selection Guide
-
-Model and device are auto-detected. No need to specify unless you want to override.
-
-| Hardware | Auto Model | Speed (30min video) | Quality |
-|----------|-----------|---------------------|---------|
-| GPU (16GB+) | `medium` | ~1 min | High |
-| GPU (4-8GB) | `small` | ~30s | Good |
-| GPU (<4GB) | `base` | ~20s | OK |
-| CPU only | `tiny` | ~5 min | Draft |
-
-Options:
-- `--model auto` — auto-select based on GPU (default)
-- `--model small` — force specific model
-- `--device auto` — auto-detect GPU (default)
-- `--device cuda` — force GPU
-- `--device cpu` — force CPU
-
 ## Troubleshooting
 
-- **"ffmpeg not found"** — install: `winget install ffmpeg`
-- **Garbled output** — try specifying `--language` explicitly
-- **Too slow** — use `--device cuda` for GPU, or `tiny` model for CPU
+- **"ffmpeg not found"** — `winget install ffmpeg`
+- **Garbled output** — specify `--language` explicitly
+- **Too slow** — check GPU with `--info`, or use `tiny` model
 - **Poor quality** — try `small` or `medium` model
-- **GPU not detected** — ensure CUDA toolkit + cuDNN installed; check `python -c "import torch; print(torch.cuda.is_available())"`
+- **GPU not detected** — needs CUDA toolkit + cuDNN; check `python -c "import torch; print(torch.cuda.is_available())"`
