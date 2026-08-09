@@ -221,8 +221,21 @@ def process_single(input_path: str, model_size: str, language: str, output_path:
         print(f"Error: file not found: {input_path}", file=sys.stderr)
         return None
 
+    # Auto-create output directory if not specified
     if not output_path:
-        output_path = str(input_path.with_suffix("")) + "_transcript.txt"
+        # Create folder based on video name
+        stem = input_path.stem
+        # Clean up common prefixes
+        for prefix in ["YTDown.com_YouTube_", "YTDown.com_"]:
+            if stem.startswith(prefix):
+                stem = stem[len(prefix):]
+        # Truncate long names
+        if len(stem) > 50:
+            stem = stem[:50].rstrip("_-")
+        
+        out_dir = input_path.parent / "outputs" / stem
+        out_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(out_dir / "transcript.txt")
 
     # Detect video vs audio
     probe = subprocess.run(
@@ -273,17 +286,20 @@ def process_single(input_path: str, model_size: str, language: str, output_path:
             if is_video and os.path.exists(tmp_audio):
                 os.unlink(tmp_audio)
 
+    # Determine output directory for SRT and burned video
+    out_dir = Path(output_path).parent
+
     # Generate SRT if requested
     if srt:
-        srt_path = str(input_path.with_suffix("")) + ".srt"
+        srt_path = str(out_dir / "subtitles.srt")
         write_srt(segments, srt_path)
 
     # Burn subtitles into video if requested
     if burn and is_video:
-        srt_path = str(input_path.with_suffix("")) + ".srt"
+        srt_path = str(out_dir / "subtitles.srt")
         if not os.path.exists(srt_path):
             write_srt(segments, srt_path)
-        burned_path = str(input_path.with_suffix("")) + "_subtitled" + input_path.suffix
+        burned_path = str(out_dir / "video_subtitled.mp4")
         burn_subtitles(str(input_path), srt_path, burned_path)
 
     # Print to stdout

@@ -39,18 +39,25 @@ Creates isolated venv at `<skill_dir>/venv/`. No conflicts with user's Python.
 <skill_dir>/scripts/run.bat --info
 ```
 
-## Output Files
+## Output Structure
 
-For each video, generated alongside it:
+Each video gets its own folder under `outputs/`:
 ```
-video.mp4                ← source
-video_transcript.txt     ← timestamped raw text
-video.srt                ← subtitle file (--srt flag)
-video_subtitled.mp4      ← video with hardcoded subtitles (--burn flag)
-video_summary.md         ← LLM-generated summary (Step 2)
+outputs/
+└── <video-name>/
+    ├── transcript.txt     ← timestamped raw text
+    ├── subtitles.srt      ← SRT subtitle file (--srt flag)
+    ├── video_subtitled.mp4 ← burned subtitles (--burn flag)
+    ├── narration.mp3      ← TTS narration audio
+    ├── narrated.mp4       ← video with narration
+    ├── summary.md         ← LLM-generated summary
+    ├── images/            ← AI-generated images (Douyin workflow)
+    │   ├── 01.png
+    │   └── ...
+    └── douyin_meta.txt    ← title + description + hashtags
 ```
 
-**Smart caching**: If `_transcript.txt` exists, transcription is skipped. If `_summary.md` exists, just read it.
+**Smart caching**: If `transcript.txt` exists, transcription is skipped. If `summary.md` exists, just read it.
 
 ## Step 1 — Transcribe
 

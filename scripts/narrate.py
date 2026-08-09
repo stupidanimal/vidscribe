@@ -238,14 +238,20 @@ async def main():
     voice = args.voice or get_default_voice(target_lang)
     print(f"Step 3: Generating narration (voice: {voice})...", file=sys.stderr)
     
-    narration_path = str(input_path.with_suffix("")) + "_narration.mp3"
+    # Output to same directory as transcript
+    out_dir = Path(input_path).parent / "outputs" / input_path.stem
+    if args.output:
+        out_dir = Path(args.output).parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+    
+    narration_path = str(out_dir / "narration.mp3")
     await generate_narration(narration_text, voice, narration_path, args.rate)
     
     # Step 4: Combine
     if args.output:
         output_path = args.output
     else:
-        output_path = str(input_path.with_suffix("")) + "_narrated" + input_path.suffix
+        output_path = str(out_dir / "narrated.mp4")
     
     print("Step 4: Combining audio...", file=sys.stderr)
     combine_audio_video(str(input_path), narration_path, output_path, 
