@@ -103,6 +103,34 @@ Read the transcript, then produce:
 - **Code/Commands** — any technical details mentioned
 - **TL;DR** — 2-3 sentence summary
 
+## Model Selection Guide
+
+Model and device are auto-detected. No need to specify unless you want to override.
+
+| Hardware | Auto Model | Speed (30min video) | Quality |
+|----------|-----------|---------------------|---------|
+| GPU (16GB+) | `medium` | ~1 min | High |
+| GPU (4-8GB) | `small` | ~30s | Good |
+| GPU (<4GB) | `base` | ~20s | OK |
+| CPU only | `tiny` | ~5 min | Draft |
+
+Options:
+- `--model auto` — auto-select based on GPU (default)
+- `--model small` — force specific model
+- `--device auto` — auto-detect GPU (default)
+- `--device cuda` — force GPU
+- `--device cpu` — force CPU
+
+## GPU & venv notes (agent guidance)
+
+- `install.bat` creates an isolated venv with only faster-whisper + yt-dlp (**no torch**).
+  Inside the venv, `detect_device()` falls back to CPU → `tiny`. That is expected, not an error.
+- If the user's system Python has torch + CUDA (e.g. anaconda), running
+  `<skill_dir>/scripts/transcribe.py` directly with the system interpreter enables GPU
+  and auto-selects a bigger model. Verify with `--info` before assuming GPU.
+- To enable GPU inside the venv: `pip install torch --index-url https://download.pytorch.org/whl/cu121` (large download; optional).
+- Never assume GPU — always check `--info` output first.
+
 ## Troubleshooting
 
 - **"ffmpeg not found"** — `winget install ffmpeg`
