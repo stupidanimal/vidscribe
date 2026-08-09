@@ -140,14 +140,44 @@ def get_default_voice(language: str) -> str:
     return voices.get(language, "en-US-BrianNeural")
 
 
+def sanitize_for_tts(text: str) -> str:
+    """Clean text for TTS - remove special characters that cause truncation.
+    
+    edge-tts has issues with: em-dashes, bullet points, special Unicode,
+    and certain punctuation combinations.
+    """
+    # Replace em-dashes with commas
+    text = text.replace("——", "，")
+    text = text.replace("—", "，")
+    text = text.replace("–", "，")
+    
+    # Remove bullet points
+    text = text.replace("•", "")
+    text = text.replace("·", "")
+    text = text.replace("■", "")
+    text = text.replace("□", "")
+    
+    # Simplify quotes
+    text = text.replace(""", "'").replace(""", "'")
+    text = text.replace("'", "'")
+    
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
+
+
 async def generate_narration(text: str, voice: str, output_path: str, rate: str = "+0%"):
     """Generate narration audio using edge-tts.
     
-    Splits text into chunks to avoid TTS truncation on long texts.
-    Each chunk is generated separately, then concatenated.
+    Sanitizes text for TTS compatibility, then splits into chunks
+    to avoid truncation on long texts.
     """
     import edge_tts
     import subprocess
+    
+    # Sanitize text for TTS
+    text = sanitize_for_tts(text)
     
     # Split text into chunks by sentence/paragraph
     sentences = []
