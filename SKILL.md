@@ -128,6 +128,16 @@ Options:
 - `--device cuda` — force GPU
 - `--device cpu` — force CPU
 
+## GPU & venv notes (agent guidance)
+
+- `install.bat` creates an isolated venv with only faster-whisper + yt-dlp (**no torch**).
+  Inside the venv, `detect_device()` falls back to CPU → `tiny`. That is expected, not an error.
+- If the user's system Python has torch + CUDA (e.g. anaconda), running
+  `<skill_dir>/scripts/transcribe.py` directly with the system interpreter enables GPU
+  and auto-selects a bigger model. Verify with `--info` before assuming GPU.
+- To enable GPU inside the venv: `pip install torch --index-url https://download.pytorch.org/whl/cu121` (large download; optional).
+- Never assume GPU — always check `--info` output first.
+
 ## Troubleshooting
 
 - **"ffmpeg not found"** — install: `winget install ffmpeg`

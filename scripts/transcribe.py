@@ -281,9 +281,14 @@ def main():
 
         elif is_url(args.input):
             # URL mode: download then transcribe
+            # 输出必须写到临时目录外面（cwd 或 --output 指定路径）：
+            # TemporaryDirectory 退出时会删除整个目录，转写文件写在里面会一起被删
             with tempfile.TemporaryDirectory() as tmpdir:
                 downloaded_file = download_video(args.input, tmpdir)
-                output_path = args.output or (str(Path(downloaded_file).with_suffix("")) + "_transcript.txt")
+                if args.output:
+                    output_path = args.output
+                else:
+                    output_path = str(Path.cwd() / (Path(downloaded_file).stem + "_transcript.txt"))
                 process_single(downloaded_file, args.model, args.language, output_path, device=args.device)
 
         else:
