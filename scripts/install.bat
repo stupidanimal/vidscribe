@@ -14,11 +14,20 @@ REM Activate venv
 call "%~dp0venv\Scripts\activate.bat"
 
 REM Install Python packages
-echo [2/5] Installing Python packages...
-pip install faster-whisper yt-dlp --quiet
+echo [2/6] Installing Python packages...
+pip install faster-whisper yt-dlp edge-tps --quiet
+
+REM Install jimeng-cli (for Douyin image generation)
+echo [3/6] Installing jimeng-cli...
+npm list -g jimeng-cli >nul 2>&1
+if %errorlevel% neq 0 (
+    npm install -g jimeng-cli
+) else (
+    echo   OK
+)
 
 REM Check ffmpeg
-echo [3/5] Checking ffmpeg...
+echo [4/6] Checking ffmpeg...
 ffmpeg -version >nul 2>&1
 if %errorlevel% neq 0 (
     echo   Installing ffmpeg...
@@ -28,7 +37,7 @@ if %errorlevel% neq 0 (
 )
 
 REM Check GPU
-echo [4/5] Checking GPU...
+echo [5/6] Checking GPU...
 python -c "import torch; assert torch.cuda.is_available()" >nul 2>&1
 if %errorlevel% neq 0 (
     echo   CPU only - will use tiny model
@@ -37,7 +46,7 @@ if %errorlevel% neq 0 (
 )
 
 REM HF Token (optional)
-echo [5/5] HuggingFace token...
+echo [6/6] HuggingFace token...
 if defined HF_TOKEN (
     echo   Token found
 ) else (

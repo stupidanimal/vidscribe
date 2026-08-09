@@ -13,13 +13,15 @@ Video/Audio → ffmpeg extracts audio → faster-whisper transcribes → SRT sub
 ## Features
 
 - **Isolated environment** — venv auto-created, no conflicts with user's Python
-- **100% local** — no cloud, no API keys, no data leaves your machine
+- **100% local transcription** — no cloud, no API keys, no data leaves your machine
 - **99+ languages** — English, Chinese, Japanese, etc.
 - **Auto model selection** — picks best model based on GPU/CPU
 - **Smart caching** — skips transcription if transcript exists
 - **URL download** — YouTube, Bilibili, etc. via yt-dlp
 - **Batch mode** — process entire folder
 - **Subtitles** — generate SRT files or burn subtitles into video
+- **AI narration** — Chinese/English TTS via edge-tts (free, no API key)
+- **Douyin video pipeline** — transcription + narration + jimeng image generation + slideshow
 
 ## Quick Start
 
