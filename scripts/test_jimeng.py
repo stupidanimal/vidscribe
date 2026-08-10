@@ -2,10 +2,11 @@
 """Test Jimeng API via jimeng-free-api-all service."""
 
 import json
+import os
 import requests
 import sys
 
-SESSION_ID = "REDACTED_SESSION_ID"
+SESSION_ID = os.environ.get("JIMENG_SESSION_ID", "")  # Set via: export JIMENG_SESSION_ID=your_sessionid
 API_URL = "https://jimeng.duckcloud.fun"
 
 def test_generate(prompt: str, ratio: str = "9:16"):
